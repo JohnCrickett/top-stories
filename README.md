@@ -26,4 +26,6 @@ The scraper will:
 
 ### Stopping the Scraper
 
-Press `CTRL-C` to gracefully shutdown the scraper.
+Press `CTRL-C` to initiate graceful shutdown. The scraper will finish the current Hacker News fetch and attempt to flush pending Kafka messages (with a 3-second timeout). If the process doesn't exit after 3 seconds, it will force exit.
+
+If the process hangs beyond that, you can force kill it with `CTRL-C` again or `kill -9 <pid>`.

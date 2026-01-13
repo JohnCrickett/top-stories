@@ -37,3 +37,6 @@ next-env.d.ts
 
 # certs and keys
 certs-and-keys/
+
+# local config
+backend/config.yaml
