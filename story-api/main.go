@@ -278,6 +278,17 @@ func (s *StoryStore) GetAllStories() []*Story {
 
 // handleGetStories handles GET /stories with optional filtering and sorting
 func (s *Server) handleGetStories(w http.ResponseWriter, r *http.Request) {
+	// Add CORS headers
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	
+	// Handle preflight requests
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	
 	stories := s.store.GetAllStories()
 
 	// Parse query parameters
@@ -347,6 +358,8 @@ func (s *Server) handleGetStories(w http.ResponseWriter, r *http.Request) {
 func (s *Server) setupRoutes() {
 	http.HandleFunc("/stories", s.handleGetStories)
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		// Add CORS headers
+		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})

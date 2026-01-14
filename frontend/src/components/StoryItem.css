@@ -1,0 +1,61 @@
+.story-item {
+  margin-bottom: 0;
+  padding: 10px 0;
+  border-bottom: 1px solid #eee;
+  list-style: none;
+}
+
+.story-item:last-child {
+  border-bottom: none;
+}
+
+.story-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.rank {
+  color: #999;
+  font-weight: normal;
+  min-width: 30px;
+}
+
+.story-content {
+  flex: 1;
+}
+
+.story-title {
+  color: #000;
+  text-decoration: none;
+  font-weight: bold;
+}
+
+.story-title:visited {
+  color: #666;
+  font-weight: normal;
+}
+
+.story-title:hover {
+  color: #ff6600;
+}
+
+.domain {
+  color: #999;
+  font-size: 12px;
+  margin-left: 6px;
+}
+
+.story-meta {
+  margin-left: 30px;
+  font-size: 12px;
+  color: #999;
+}
+
+.story-meta span {
+  margin-right: 16px;
+}
+
+.story-meta span:last-child {
+  margin-right: 0;
+}

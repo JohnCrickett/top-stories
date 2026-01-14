@@ -1,0 +1,12 @@
+port: 3000
+refresh_interval: 60
+
+apis:
+  - name: "Top Stories"
+    url: "http://localhost:8080/stories"
+  - name: "Ask HN"
+    url: "http://localhost:8081/stories"
+  - name: "Show HN"
+    url: "http://localhost:8082/stories"
+  - name: "Rust"
+    url: "http://localhost:8083/stories"

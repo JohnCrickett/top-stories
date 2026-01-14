@@ -1,0 +1,27 @@
+.stories {
+  background-color: #fff;
+  padding: 20px;
+}
+
+.loading-state,
+.error-state,
+.no-stories {
+  text-align: center;
+  padding: 40px 20px;
+  color: #666;
+}
+
+.error-state {
+  color: #cc0000;
+}
+
+.story-list {
+  list-style: decimal inside;
+  margin: 0;
+  padding: 0;
+}
+
+.story-list li {
+  margin-bottom: 0;
+  padding: 0;
+}
