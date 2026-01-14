@@ -1,0 +1,16 @@
+kafka:
+  broker: kafka-top-stories-top-stories.j.aivencloud.com:19196
+  topic: hn-stories
+  consumer_group: story-api-rust
+  ca_cert_path: ../certs-and-keys/ca.pem
+  client_cert_path: ../certs-and-keys/service.cert
+  client_key_path: ../certs-and-keys/service.key
+
+api:
+  port: 8082
+
+# Consume only Rust-related stories (any type with "rust" in the title)
+filter:
+  story_types: []
+  keywords: ["rust"]
+  minimum_score: 0

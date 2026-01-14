@@ -1,0 +1,16 @@
+kafka:
+  broker: kafka-top-stories-top-stories.j.aivencloud.com:19196
+  topic: hn-stories
+  consumer_group: story-api-ask
+  ca_cert_path: ../certs-and-keys/ca.pem
+  client_cert_path: ../certs-and-keys/service.cert
+  client_key_path: ../certs-and-keys/service.key
+
+api:
+  port: 8081
+
+# Consume "Ask HN" stories (identified by "Ask HN" in title, case-insensitive)
+filter:
+  story_types: []
+  keywords: ["ask hn"]
+  minimum_score: 0

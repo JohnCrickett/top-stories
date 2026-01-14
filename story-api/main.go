@@ -5,12 +5,15 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -20,8 +23,9 @@ import (
 )
 
 type Config struct {
-	Kafka KafkaConfig `yaml:"kafka"`
-	API   APIConfig   `yaml:"api"`
+	Kafka  KafkaConfig  `yaml:"kafka"`
+	API    APIConfig    `yaml:"api"`
+	Filter FilterConfig `yaml:"filter"`
 }
 
 type KafkaConfig struct {
@@ -35,6 +39,12 @@ type KafkaConfig struct {
 
 type APIConfig struct {
 	Port int `yaml:"port"`
+}
+
+type FilterConfig struct {
+	StoryTypes   []string `yaml:"story_types"`
+	Keywords     []string `yaml:"keywords"`
+	MinimumScore int      `yaml:"minimum_score"`
 }
 
 type Story struct {
@@ -53,11 +63,72 @@ type StoryStore struct {
 }
 
 type Server struct {
-	store  *StoryStore
-	config Config
-	reader *kafka.Reader
-	ctx    context.Context
-	cancel context.CancelFunc
+	store    *StoryStore
+	config   Config
+	reader   *kafka.Reader
+	ctx      context.Context
+	cancel   context.CancelFunc
+	filter   *StoryFilter
+}
+
+type StoryFilter struct {
+	storyTypes   map[string]bool // For O(1) lookups
+	keywords     []string
+	minimumScore int
+	enabled      bool // true if any filter is configured
+}
+
+// NewStoryFilter creates a filter from config
+func NewStoryFilter(cfg FilterConfig) *StoryFilter {
+	filter := &StoryFilter{
+		storyTypes:   make(map[string]bool),
+		keywords:     cfg.Keywords,
+		minimumScore: cfg.MinimumScore,
+	}
+
+	// Populate storyTypes map for O(1) lookups
+	for _, t := range cfg.StoryTypes {
+		filter.storyTypes[t] = true
+	}
+
+	// Filter is enabled if any filter constraint is specified
+	filter.enabled = len(cfg.StoryTypes) > 0 || len(cfg.Keywords) > 0 || cfg.MinimumScore > 0
+
+	return filter
+}
+
+// Matches returns true if a story passes all configured filters
+func (f *StoryFilter) Matches(story *Story) bool {
+	if !f.enabled {
+		return true // No filters configured, match everything
+	}
+
+	// Check story type filter
+	if len(f.storyTypes) > 0 && !f.storyTypes[story.Type] {
+		return false
+	}
+
+	// Check minimum score filter
+	if story.Score < f.minimumScore {
+		return false
+	}
+
+	// Check keywords filter (match if ANY keyword is found in title)
+	if len(f.keywords) > 0 {
+		titleLower := strings.ToLower(story.Title)
+		matched := false
+		for _, keyword := range f.keywords {
+			if strings.Contains(titleLower, strings.ToLower(keyword)) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+
+	return true
 }
 
 func loadConfig(path string) (*Config, error) {
@@ -72,9 +143,11 @@ func loadConfig(path string) (*Config, error) {
 	}
 
 	// Resolve cert paths relative to config file directory
-	configDir := ""
-	if path != "config.yaml" {
-		configDir = path[:len(path)-len("config.yaml")]
+	configDir := filepath.Dir(path)
+	if configDir == "." {
+		configDir = ""
+	} else if configDir != "" {
+		configDir += string(filepath.Separator)
 	}
 
 	if cfg.Kafka.CACertPath != "" && cfg.Kafka.CACertPath[0] != '/' {
@@ -116,16 +189,16 @@ func createKafkaReader(cfg KafkaConfig) (*kafka.Reader, error) {
 	}
 
 	reader := kafka.NewReader(kafka.ReaderConfig{
-		Brokers:        []string{cfg.Broker},
-		Topic:          cfg.Topic,
-		GroupID:        cfg.ConsumerGroup,
-		StartOffset:    kafka.LastOffset,
-		Dialer:         dialer,
-		CommitInterval: time.Second,
+		Brokers:     []string{cfg.Broker},
+		Topic:       cfg.Topic,
+		StartOffset: kafka.FirstOffset,
+		Dialer:      dialer,
+		// Note: Not using consumer groups so no offsets are tracked across restarts
+		// Each instance always reads from the beginning
 	})
 
-	fmt.Printf("[DEBUG] Kafka reader configured for broker: %s, topic: %s, group: %s\n",
-		cfg.Broker, cfg.Topic, cfg.ConsumerGroup)
+	fmt.Printf("[DEBUG] Kafka reader configured for broker: %s, topic: %s\n",
+		cfg.Broker, cfg.Topic)
 	return reader, nil
 }
 
@@ -135,6 +208,8 @@ func NewServer(cfg Config) (*Server, error) {
 		return nil, fmt.Errorf("failed to create Kafka reader: %w", err)
 	}
 
+	filter := NewStoryFilter(cfg.Filter)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Server{
 		store:  &StoryStore{stories: make(map[int]*Story)},
@@ -142,6 +217,7 @@ func NewServer(cfg Config) (*Server, error) {
 		reader: reader,
 		ctx:    ctx,
 		cancel: cancel,
+		filter: filter,
 	}, nil
 }
 
@@ -171,12 +247,15 @@ func (s *Server) consumeMessages() {
 			continue
 		}
 
+		// Apply filter before storing
+		if !s.filter.Matches(&story) {
+			fmt.Printf("[FILTERED] Story ID %d: %s (Type: %s, Score: %d)\n",
+				story.ID, story.Title, story.Type, story.Score)
+			continue
+		}
+
 		s.store.AddStory(&story)
 		fmt.Printf("[STORED] Story ID %d: %s (Score: %d)\n", story.ID, story.Title, story.Score)
-
-		if err := s.reader.CommitMessages(s.ctx, msg); err != nil {
-			fmt.Printf("[ERROR] Failed to commit message: %v\n", err)
-		}
 	}
 }
 
@@ -276,6 +355,23 @@ func (s *Server) setupRoutes() {
 func (s *Server) start() {
 	s.setupRoutes()
 
+	// Log filter configuration
+	if s.filter.enabled {
+		fmt.Println("\n[CONFIG] Consumer-side filtering enabled:")
+		if len(s.filter.storyTypes) > 0 {
+			fmt.Printf("  Story types: %v\n", s.config.Filter.StoryTypes)
+		}
+		if len(s.filter.keywords) > 0 {
+			fmt.Printf("  Keywords: %v\n", s.config.Filter.Keywords)
+		}
+		if s.filter.minimumScore > 0 {
+			fmt.Printf("  Minimum score: %d\n", s.filter.minimumScore)
+		}
+		fmt.Println()
+	} else {
+		fmt.Println("\n[CONFIG] No filters configured - consuming all stories\n")
+	}
+
 	addr := fmt.Sprintf(":%d", s.config.API.Port)
 	fmt.Printf("Starting API server on %s\n", addr)
 
@@ -316,7 +412,10 @@ func (s *Server) start() {
 }
 
 func main() {
-	cfg, err := loadConfig("config.yaml")
+	configPath := flag.String("config", "config.yaml", "Path to configuration file")
+	flag.Parse()
+
+	cfg, err := loadConfig(*configPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
 		os.Exit(1)

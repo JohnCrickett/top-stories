@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -77,9 +78,11 @@ func loadConfig(path string) (*Config, error) {
 	}
 
 	// Resolve cert paths relative to config file directory
-	configDir := ""
-	if path != "config.yaml" {
-		configDir = path[:len(path)-len("config.yaml")]
+	configDir := filepath.Dir(path)
+	if configDir == "." {
+		configDir = ""
+	} else if configDir != "" {
+		configDir += string(filepath.Separator)
 	}
 
 	if cfg.Kafka.CACertPath != "" && cfg.Kafka.CACertPath[0] != '/' {

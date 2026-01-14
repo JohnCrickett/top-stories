@@ -1,0 +1,16 @@
+kafka:
+  broker: kafka-top-stories-top-stories.j.aivencloud.com:19196
+  topic: hn-stories
+  consumer_group: story-api-all
+  ca_cert_path: ../certs-and-keys/ca.pem
+  client_cert_path: ../certs-and-keys/service.cert
+  client_key_path: ../certs-and-keys/service.key
+
+api:
+  port: 8080
+
+# Consume ALL stories (no filtering)
+filter:
+  story_types: []
+  keywords: []
+  minimum_score: 0

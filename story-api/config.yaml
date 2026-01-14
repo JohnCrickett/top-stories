@@ -8,3 +8,19 @@ kafka:
 
 api:
   port: 8080
+
+# Consumer-side filtering configuration
+# Leave these empty/undefined to disable filtering and consume all stories
+filter:
+  # story_types: list of story types to consume (e.g., ["story", "ask", "show", "poll"])
+  # Leave empty to consume all types
+  story_types: []
+  
+  # keywords: list of keywords to match in story titles (case-insensitive)
+  # A story matches if it contains ANY of these keywords
+  # Leave empty to match all stories
+  keywords: []
+  
+  # minimum_score: only consume stories with score >= minimum_score
+  # Set to 0 to disable minimum score filtering
+  minimum_score: 0
